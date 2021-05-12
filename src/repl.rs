@@ -112,7 +112,10 @@ pub fn interactive(config: &Config) -> Result<()> {
                 break;
             }
             ReadResult::Signal(sig) => {
-                if sig == Signal::Interrupt || sig == Signal::Quit {
+                if sig == Signal::Interrupt {
+                    rl.cancel_read_line()?;
+                }
+                if sig == Signal::Quit {
                     if let Some(ref mut path) = hpath {
                         if let Err(e) = rl.save_history(path) {
                             eprintln!("Saving history failed: {}", e);
