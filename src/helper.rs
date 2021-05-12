@@ -1,13 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use rustyline::{
-    completion::{extract_word, Completer, Pair},
-    highlight::Highlighter,
-    hint::Hinter,
-    validate::Validator,
-    Helper,
-};
-use rustyline::{Context as LineContext, Result};
+use linefeed::complete::{Completer, Completion};
+use linefeed::terminal::Terminal;
+use linefeed::Prompter;
 
 use rink_core::{search::query, Context};
 
@@ -17,43 +12,35 @@ pub struct RinkHelper {
     context: Arc<Mutex<Context>>,
     config: Config,
 }
-
 impl RinkHelper {
     pub fn new(context: Arc<Mutex<Context>>, config: Config) -> RinkHelper {
         RinkHelper { context, config }
     }
 }
 
-impl Completer for RinkHelper {
-    type Candidate = Pair;
-
-    fn complete(&self, line: &str, pos: usize, _ctx: &LineContext) -> Result<(usize, Vec<Pair>)> {
-        let (res_pos, name) = extract_word(line, pos, None, &[b' ']);
-
+impl<Term: Terminal> Completer<Term> for RinkHelper {
+    fn complete(
+        &self,
+        word: &str,
+        _prompter: &Prompter<Term>,
+        _start: usize,
+        _end: usize,
+    ) -> Option<Vec<Completion>> {
         let ctx = self.context.lock().unwrap();
-        let reply = query(&ctx, name, 100);
+        let reply = query(&ctx, word, 100);
 
         let results = reply
             .results
             .into_iter()
-            .filter(|result| result.unit.as_ref().unwrap().starts_with(name))
+            .filter(|result| result.unit.as_ref().unwrap().starts_with(word))
             .take(10)
-            .map(|result| Pair {
-                display: to_ansi_string(&self.config, &result),
-                replacement: result.unit.unwrap(),
+            .map(|result| Completion {
+                display: Some(to_ansi_string(&self.config, &result)),
+                completion: result.unit.unwrap(),
+                suffix: linefeed::complete::Suffix::None,
             })
             .collect();
 
-        Ok((res_pos, results))
+        Some(results)
     }
-}
-
-impl Helper for RinkHelper {}
-
-impl Validator for RinkHelper {}
-
-impl Highlighter for RinkHelper {}
-
-impl Hinter for RinkHelper {
-    type Hint = String;
 }
