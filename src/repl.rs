@@ -1,16 +1,14 @@
 use crate::config::Config;
 use eyre::Result;
-use rustyline::{config::{Configurer, EditMode, BellStyle}, error::ReadlineError, CompletionType, Editor};
+use rustyline::{config::Configurer, error::ReadlineError, CompletionType, Editor};
 use std::io::{BufRead, ErrorKind};
 use std::sync::{Arc, Mutex};
 
-use linefeed::{inputrc,inputrc::Directive};
 use rink_core::{eval, one_line};
 
 use crate::fmt::print_fmt;
 use crate::RinkHelper;
 
-use std::env;
 
 pub fn noninteractive<T: BufRead>(mut f: T, config: &Config, show_prompt: bool) -> Result<()> {
     use std::io::{stdout, Write};
@@ -40,28 +38,9 @@ pub fn noninteractive<T: BufRead>(mut f: T, config: &Config, show_prompt: bool) 
 }
 
 pub fn interactive(config: &Config) -> Result<()> {
-    let inputrc_path = env::var("INPUTRC")?;
-    let inputrc_config = inputrc::parse_file(&inputrc_path).unwrap_or_default();
     let mut rustyl_config = rustyline::config::Config::builder();
 
-    for directive in inputrc_config {
-        match directive {
-            Directive::SetVariable(key, value) => match key.as_str() {
-                "editing-mode" => rustyl_config = rustyl_config.edit_mode( match value.as_str() {
-                    "vi" => EditMode::Vi,
-                    "emacs" | _ => EditMode::Emacs,
-                }),
-                "bell-style" => rustyl_config = rustyl_config.bell_style( match value.as_str() {
-                    "none" => BellStyle::None,
-                    "visible" => BellStyle::Visible,
-                    "audible" | _ => BellStyle::Audible,
-                }),
-                "keyseq-timeout" => rustyl_config = rustyl_config.keyseq_timeout(value.parse::<i32>()?),
-                _ => (),
-            },
-            _ => (),
-        }
-    }
+    rustyl_config = rustyl_config.ingest_inputrc()?;
 
     let mut rl = Editor::<RinkHelper>::with_config(rustyl_config.build());
 
